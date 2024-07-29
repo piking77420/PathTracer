@@ -76,6 +76,8 @@ Shader "Unlit/NewUnlitShader"
                 RayTracingMaterial material;
             };
 
+            int Frame;
+
             float3 CameraPos;
             float3 ViewParams;
             float4x4 CamLocalToWorldMatrix;
@@ -91,7 +93,7 @@ Shader "Unlit/NewUnlitShader"
                 uint2 pixelCoord = (uint2)(numPixels * uv);
                 uint pixelIndex = pixelCoord.y * numPixels.x + pixelCoord.x;
 
-                return (pixelIndex);
+                return (pixelIndex) + Frame * 719393;
             }
 
 	        uint NextRandom(inout uint state)
@@ -196,23 +198,22 @@ Shader "Unlit/NewUnlitShader"
                         r.dir = RandomRayHemisphere(hit.normal, seed);
 
                         RayTracingMaterial mat = hit.material;
-
                         float3 emmitedLight = mat.emmisiveColor * mat.emmisiveStrenght;
 
+                        float lightStreng = dot(hit.normal, r.dir);
+
                         incomingLight += emmitedLight * rayColor;
-                        rayColor *= mat.color;
+                        rayColor *= mat.color * lightStreng;
+
                         hasHitSomething = true;
                     }
                     else
                     {
+                        //incomingLight += float3(0.1, 0.2, 0.4);
                         break;
                     }
                 }
 
-                if (!hasHitSomething)
-                {
-                    incomingLight = float3(0.1, 0.2, 0.5);
-                }
 
                 return incomingLight;
             }

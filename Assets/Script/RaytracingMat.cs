@@ -8,10 +8,10 @@ public class RaytracingMat : MonoBehaviour
     public Color color;
 
     [SerializeField]
-    public Color emmisiveColor = Color.black;
+    public Color emissiveColor = Color.black;
 
-    [SerializeField, Range(0, 10)]
-    public float emmisiveStrenght;
+    [SerializeField, Range(0, 100)]
+    public float emissiveStrength;
 
     [SerializeField, Range(0, 100)]
     public float radius;
