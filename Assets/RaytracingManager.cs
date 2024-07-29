@@ -7,10 +7,10 @@ using UnityEngine;
 [ExecuteAlways, ImageEffectAllowedInSceneView]
 public class RaytracingManager : MonoBehaviour
 {
-    [SerializeField,Range(1,100)]
+    [SerializeField,Range(1,1000)]
     int nbrOfRayBound;
 
-    [SerializeField, Range(1, 100)]
+    [SerializeField, Range(1, 1000)]
     int nbrOfRayPerPixel;
 
     [SerializeField]
