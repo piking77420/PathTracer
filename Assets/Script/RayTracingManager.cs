@@ -7,6 +7,9 @@ using static UnityEngine.GraphicsBuffer;
 [ExecuteAlways, ImageEffectAllowedInSceneView]
 public class RayTracingManager : MonoBehaviour
 {
+    static public RayTracingManager Instance;
+
+    // Setting
     [SerializeField, Range(1, 1000)]
     int nbrOfRayBound = 10;
 
@@ -17,35 +20,21 @@ public class RayTracingManager : MonoBehaviour
     bool UseShaderInEditor = true;
 
     [SerializeField]
+    int numRenderedFrames;
+    //
+    // Shader
+    [SerializeField]
     Material RayTracingMaterial;
 
     [SerializeField]
     Material AccumulateMaterial;
 
     [SerializeField]
-    List<RaytracingMat> rayTracingSpheres;
-
-    ComputeBuffer computeBuffer;
-
-    [SerializeField]
-    int numRenderedFrames;
-
+    RaytracingMeshManager RayTracingMeshManager;
+    
     RenderTexture resultTexture;
+   
 
-    struct RayTracingSphere
-    {
-        public Vector3 pos;
-        public float radius;
-        public Vector4 color;
-        public Vector4 emissiveColor;
-        public float emissiveStrength;
-    }
-
-    [ContextMenu("GetMaterial")]
-    private void GetMaterial()
-    {
-        rayTracingSpheres = FindObjectsOfType<RaytracingMat>().ToList();
-    }
 
     void ResizeRenderTarget(RenderTexture renderTexture)
     {
@@ -87,14 +76,17 @@ public class RayTracingManager : MonoBehaviour
             resultTexture.Create();
         }
 
+        var models = FindObjectsOfType<RayTracingModel>();
+        RayTracingMeshManager.UpateModelData(models, RayTracingMaterial);
+
         ResizeRenderTarget(resultTexture);
         UpdateCameraInfo(Camera.current);
-        SetSphereInfo();
         SetSettings();
     }
 
     private void OnRenderImage(RenderTexture src, RenderTexture target)
     {
+
         bool isSceneCam = Camera.current.name == "SceneCamera";
 
         if (isSceneCam)
@@ -144,34 +136,6 @@ public class RayTracingManager : MonoBehaviour
         RayTracingMaterial.SetInt("nbrOfRayPerPixel", nbrOfRayPerPixel);
     }
 
-    private void SetSphereInfo()
-    {
-        if (computeBuffer != null)
-        {
-            computeBuffer.Release();
-        }
-
-        int sizeOf = System.Runtime.InteropServices.Marshal.SizeOf(typeof(RayTracingSphere));
-        computeBuffer = new ComputeBuffer(rayTracingSpheres.Count, sizeOf);
-
-        RayTracingSphere[] sphereData = new RayTracingSphere[rayTracingSpheres.Count];
-        for (int i = 0; i < rayTracingSpheres.Count; i++)
-        {
-            sphereData[i] = new RayTracingSphere
-            {
-                pos = rayTracingSpheres[i].transform.position,
-                radius = rayTracingSpheres[i].radius,
-                color = rayTracingSpheres[i].color,
-                emissiveColor = rayTracingSpheres[i].emissiveColor,
-                emissiveStrength = rayTracingSpheres[i].emissiveStrength
-            };
-        }
-
-        computeBuffer.SetData(sphereData);
-
-        RayTracingMaterial.SetBuffer("spheres", computeBuffer);
-        RayTracingMaterial.SetInt("nbrOfSphere", rayTracingSpheres.Count);
-    }
 
     private void UpdateCameraInfo(Camera cam)
     {
@@ -185,10 +149,7 @@ public class RayTracingManager : MonoBehaviour
 
     private void OnDisable()
     {
-        if (computeBuffer != null)
-        {
-            computeBuffer.Release();
-        }
+        RayTracingMeshManager.DisableBuffer();
 
         if (resultTexture != null)
         {
