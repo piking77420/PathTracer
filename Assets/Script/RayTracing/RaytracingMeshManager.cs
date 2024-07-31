@@ -13,6 +13,7 @@ public class RaytracingMeshManager : MonoBehaviour
     {
         public List<Triangle> triangles = new();
         public List<MeshInfo> meshInfo = new();
+        public List<Bvh> bvhs = new();
     }
 
     struct MeshInfo
@@ -34,7 +35,36 @@ public class RaytracingMeshManager : MonoBehaviour
     MeshInfo[] meshInfo;
 
 
-    public static Bounds GetMinMaxAbb(Bounds mesh,Transform transform) 
+    public static Bounds GetMinMaxAbbLocal(Bounds mesh,Transform transform) 
+    {
+        Matrix4x4 matrix = transform.localToWorldMatrix.transpose;
+
+        // Calculate the transformed extents
+        Vector3 right = new Vector3(matrix.m00, matrix.m01, matrix.m02) * mesh.extents.x;
+        Vector3 up = new Vector3(matrix.m10, matrix.m11, matrix.m12) * mesh.extents.y;
+        Vector3 forward = new Vector3(matrix.m20, matrix.m21, matrix.m22) * mesh.extents.z;
+
+        // Calculate the new extents based on the transformed axes
+        float i = Mathf.Abs(Vector3.Dot(right, Vector3.right)) +
+                  Mathf.Abs(Vector3.Dot(up, Vector3.right)) +
+                  Mathf.Abs(Vector3.Dot(forward, Vector3.right));
+
+        float j = Mathf.Abs(Vector3.Dot(right, Vector3.up)) +
+                  Mathf.Abs(Vector3.Dot(up, Vector3.up)) +
+                  Mathf.Abs(Vector3.Dot(forward, Vector3.up));
+
+        float k = Mathf.Abs(Vector3.Dot(right, Vector3.forward)) +
+                  Mathf.Abs(Vector3.Dot(up, Vector3.forward)) +
+                  Mathf.Abs(Vector3.Dot(forward, Vector3.forward));
+
+        // Transform the center point correctly
+        Vector3 transformedCenter = transform.TransformPoint(mesh.center);
+
+        // Create the new bounds
+        return new Bounds(transformedCenter, new Vector3(i, j, k) * 2f);
+    }
+
+    public static Bounds GetMinMaxAbbWorld(Bounds mesh, Transform transform)
     {
         Matrix4x4 matrix = transform.localToWorldMatrix.transpose;
 
@@ -42,21 +72,21 @@ public class RaytracingMeshManager : MonoBehaviour
         Vector3 up = new Vector3(matrix.m10, matrix.m11, matrix.m12) * mesh.extents.y;
         Vector3 forward = new Vector3(matrix.m20, matrix.m21, matrix.m22) * mesh.extents.z;
 
-        float i = Mathf.Abs(Vector3.Dot(right, Vector3.right) )+ Mathf.Abs(Vector3.Dot(up, Vector3.right) )+
+        float i = Mathf.Abs(Vector3.Dot(right, Vector3.right)) + Mathf.Abs(Vector3.Dot(up, Vector3.right)) +
             Mathf.Abs(Vector3.Dot(forward, Vector3.right));
 
-        float j = Mathf.Abs(Vector3.Dot(right, Vector3.up) )+ Mathf.Abs(Vector3.Dot(up, Vector3.up) )+
+        float j = Mathf.Abs(Vector3.Dot(right, Vector3.up)) + Mathf.Abs(Vector3.Dot(up, Vector3.up)) +
            Mathf.Abs(Vector3.Dot(forward, Vector3.up));
 
-        float k = Mathf.Abs(Vector3.Dot(right, Vector3.forward) )+ Mathf.Abs(Vector3.Dot(up, Vector3.forward) )+
+        float k = Mathf.Abs(Vector3.Dot(right, Vector3.forward)) + Mathf.Abs(Vector3.Dot(up, Vector3.forward)) +
            Mathf.Abs(Vector3.Dot(forward, Vector3.forward));
 
-        Vector4 transformedCenter = transform.localToWorldMatrix * new Vector4(mesh.center.x, mesh.center.y, mesh.center.z, 0f);
+        Vector4 transformedCenter = transform.localToWorldMatrix * new Vector4(mesh.center.x, mesh.center.y, mesh.center.z, 1f);
 
         return new Bounds(transformedCenter, new Vector3(i, j, k) * 2f);
     }
 
-    void GetTriangle(ref Triangle[] tri, Vector3[] verts, int[] indices, Vector3[] normals)
+    public static void GetTriangle(ref Triangle[] tri, Vector3[] verts, int[] indices, Vector3[] normals)
     {
         int triangleCount = indices.Length / 3;
         tri = new Triangle[triangleCount];
@@ -97,8 +127,6 @@ public class RaytracingMeshManager : MonoBehaviour
         {
             Mesh mesh = model.meshFilter.sharedMesh;
 
-       
-
             if (!meshLookup.ContainsKey(mesh))
             {
                 int triangleCount = mesh.triangles.Length / 3;
@@ -107,11 +135,10 @@ public class RaytracingMeshManager : MonoBehaviour
                 Triangle[] triangles = new Triangle[triangleCount];
 
                 GetTriangle(ref triangles, mesh.vertices, mesh.triangles, mesh.normals);
+
+                allData.bvhs.Add(new Bvh(mesh.vertices, mesh.triangles, mesh.normals, mesh.bounds));
                 allData.triangles.AddRange(triangles);
             }
-
-
-            Bounds bounds = RaytracingMeshManager.GetMinMaxAbb(mesh.bounds, model.transform);
 
             // Create the mesh info
             allData.meshInfo.Add(new MeshInfo()
@@ -121,8 +148,8 @@ public class RaytracingMeshManager : MonoBehaviour
                 WorldToLocalMatrix = model.transform.worldToLocalMatrix,
                 LocalToWorldMatrix = model.transform.localToWorldMatrix,
                 Material = model.material,
-                boudMin = bounds.min,
-                boudMax = bounds.max,
+                boudMin = mesh.bounds.min,
+                boudMax = mesh.bounds.max,
             });
         }
 

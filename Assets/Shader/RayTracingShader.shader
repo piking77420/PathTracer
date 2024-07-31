@@ -69,8 +69,8 @@ Shader "Unlit/NewUnlitShader"
                  float4x4 LocalToWorldMatrix;
                  RayTracingMaterial material;
 
-                 float3 boudMin;
-                 float3 boudMax;
+                float3 boundsMin;
+				float3 boundsMax;
             };
 
             struct TriangleHitInfo
@@ -236,10 +236,9 @@ Shader "Unlit/NewUnlitShader"
                     localRay.ori = mul(mInfo.WorldToLocalMatrix, float4(worldRay.ori,1)).xyz;
                     localRay.dir = mul(mInfo.WorldToLocalMatrix, float4(worldRay.dir,0)).xyz;
 
-
                     //float3 pos = float3(mInfo.LocalToWorldMatrix[0].w,mInfo.LocalToWorldMatrix[1].w,mInfo.LocalToWorldMatrix[2].w);
 
-                    if (!RayBoundingBox(localRay, mInfo.boudMin , mInfo.boudMax))
+                    if (!RayBoundingBox(localRay, mInfo.boundsMin , mInfo.boundsMax))
                        continue;
 
                     for (int k = mInfo.firstTriangleIndex; k < mInfo.firstTriangleIndex + mInfo.numTriangles; k++)
