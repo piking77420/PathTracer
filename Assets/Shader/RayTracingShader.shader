@@ -1,6 +1,5 @@
 Shader "Unlit/NewUnlitShader"
 {
-
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
@@ -52,8 +51,6 @@ Shader "Unlit/NewUnlitShader"
                 float3 dir;
             };
          
-
-
             struct RayTracingMaterial
             {
                 float4 color;
@@ -61,16 +58,25 @@ Shader "Unlit/NewUnlitShader"
                 float emmisiveStrenght;
             };
 
+            struct BvhNode
+            {
+                float3 boxMin;
+                int child1Index;
+                float3 boxMax;
+                int child2Index;
+                int triangleIndex;
+                int triangleCount;
+            };
+
+          
+
             struct ModelInfo
             {
-                 uint firstTriangleIndex;
-				 uint numTriangles;
-                 float4x4 WorldToLocalMatrix;
-                 float4x4 LocalToWorldMatrix;
-                 RayTracingMaterial material;
-
-                float3 boundsMin;
-				float3 boundsMax;
+                int nodeOffset;
+                int triangleOffSet;
+                float4x4 WorldToLocalMatrix;
+                float4x4 LocalToWorldMatrix;
+                RayTracingMaterial material;
             };
 
             struct TriangleHitInfo
@@ -80,6 +86,15 @@ Shader "Unlit/NewUnlitShader"
                 float3 normal;
                 float dst;
             };
+
+           struct ModelHitInfo
+			{
+				float3 hitPoint;
+				bool didHit;
+				float3 normal;
+				float dst;
+				RayTracingMaterial material;
+			};
 
             struct Triangle
             {
@@ -103,13 +118,17 @@ Shader "Unlit/NewUnlitShader"
             int nbrOfRayBound;
             int nbrOfRayPerPixel;
 
-            // Buffer
-
+            // Buffers
             StructuredBuffer<ModelInfo> modelInfo;
             int modelCount;
 
             StructuredBuffer<Triangle> triangles;
             int triangleCount;
+
+            const int BvhMaxDepth = 10;
+            const int MaxNodePerBVH = 1023;
+
+            StructuredBuffer<BvhNode> nodes;
 
             uint GetPixelIndex(float2 uv)
             {
@@ -159,26 +178,6 @@ Shader "Unlit/NewUnlitShader"
 
            
 
-            Triangle TransformTriangle(ModelInfo minfo, Triangle tri)
-            {
-                Triangle transformedOne = (Triangle)0;
-    
-                // Transform positions
-                transformedOne.posA = mul(minfo.LocalToWorldMatrix, float4(tri.posA, 1.0)).xyz;
-                transformedOne.posB = mul(minfo.LocalToWorldMatrix, float4(tri.posB, 1.0)).xyz;
-                transformedOne.posC = mul(minfo.LocalToWorldMatrix, float4(tri.posC, 1.0)).xyz;
-
-                // Extract the 3x3 rotation matrix from the 4x4 matrix
-                float3x3 rotationMatrix = (float3x3)minfo.LocalToWorldMatrix;
-
-                // Transform normals
-                transformedOne.normalA = normalize(mul(rotationMatrix, tri.normalA));
-                transformedOne.normalB = normalize(mul(rotationMatrix, tri.normalB));
-                transformedOne.normalC = normalize(mul(rotationMatrix, tri.normalC));
-
-                return transformedOne;
-            }
-
             // Thanks to https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
 			bool RayBoundingBox(Ray ray, float3 boxMin, float3 boxMax)
 			{
@@ -193,7 +192,7 @@ Shader "Unlit/NewUnlitShader"
 			};
 
 
-           // Calculate the intersection of a ray with a triangle using Möller–Trumbore algorithm
+           // Calculate the intersection of a ray with a triangle using MÃ¶llerâ€“Trumbore algorithm
 			// Thanks to https://stackoverflow.com/a/42752998
 			TriangleHitInfo RayTriangle(Ray ray, Triangle tri)
 			{
@@ -221,45 +220,134 @@ Shader "Unlit/NewUnlitShader"
 				return hitInfo;
 			}
 
-            TriangleHitInfo ComputeRayTriangle(Ray worldRay, out RayTracingMaterial material)
+
+            bool isLeafNode(BvhNode n)
             {
-                TriangleHitInfo returnHitInfo;
-                returnHitInfo.didHit = false;
-                returnHitInfo.dst = 1.0 / 0.0; // Initialize to infinity
+                return n.child1Index == 0 && n.child2Index == 0; 
+            }
+
+           
+          
+            TriangleHitInfo RayTriangleBVH(inout Ray ray, float rayLength, int nodeOffset, int triOffset)
+            {
+                TriangleHitInfo result = (TriangleHitInfo)0;
+                result.dst = rayLength;
+    
+                int stackIndex[10];
+                int stackIterator = 0;
+                stackIndex[stackIterator++] = nodeOffset;
+
+                bool isParentChildA = false;
+
+                while(stackIterator > 0)
+                {
+                    BvhNode node = nodes[nodeOffset + stackIndex[--stackIterator]];
+                    bool intersect = RayBoundingBox(ray, node.boxMin, node.boxMax);
+
+                    if (intersect)
+                    {
+                        if (isLeafNode(node))
+                        {
+                            for (int i = node.triangleIndex; i < node.triangleIndex + node.triangleCount; i++)
+                            {
+                                TriangleHitInfo hit = RayTriangle(ray, triangles[i]); 
+
+                                if (hit.didHit && result.dst > hit.dst)
+                                {
+                                    result = hit;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            
+                            stackIndex[stackIterator++] = node.child1Index;
+                            stackIndex[stackIterator++] = node.child2Index;
+                        }
+                    }
+                 
+                        
+                }
+                return result;
+            } 
+                
+          
+
+              
+            
+
+            ModelHitInfo CalculateRayCollisionBruteForce(Ray worldRay)
+            {
+                ModelHitInfo result;
+                result.didHit = false;
+                result.dst = 1.0 / 0.0; // Initialize to infinity
 
                 Ray localRay;
 
                 for (int i = 0; i < modelCount; i++)
                 {
-                    ModelInfo mInfo = modelInfo[i];
-                    TriangleHitInfo currentHitInfo;
-                    localRay.ori = mul(mInfo.WorldToLocalMatrix, float4(worldRay.ori,1)).xyz;
-                    localRay.dir = mul(mInfo.WorldToLocalMatrix, float4(worldRay.dir,0)).xyz;
+                    ModelInfo model = modelInfo[i];
+                    localRay.ori = mul(model.WorldToLocalMatrix, float4(worldRay.ori,1)).xyz;
+                    localRay.dir = mul(model.WorldToLocalMatrix, float4(worldRay.dir,0)).xyz;
 
-                    //float3 pos = float3(mInfo.LocalToWorldMatrix[0].w,mInfo.LocalToWorldMatrix[1].w,mInfo.LocalToWorldMatrix[2].w);
-
-                    if (!RayBoundingBox(localRay, mInfo.boundsMin , mInfo.boundsMax))
+                    int nodeoff = model.nodeOffset;
+                    if (!RayBoundingBox(localRay,  nodes[nodeoff].boxMin, nodes[nodeoff].boxMax))
                        continue;
 
-                    for (int k = mInfo.firstTriangleIndex; k < mInfo.firstTriangleIndex + mInfo.numTriangles; k++)
-                    {
-                        currentHitInfo = RayTriangle(localRay, triangles[k]); //TransformTriangle(mInfo, triangles[k]));
-                        currentHitInfo.normal = normalize(mul(mInfo.LocalToWorldMatrix, float4(currentHitInfo.normal,0)).xyz);
-                        currentHitInfo.hitPoint = worldRay.ori + worldRay.dir * currentHitInfo.dst;
+                    for (int k = model.triangleOffSet; k < model.triangleOffSet + nodes[nodeoff].triangleCount; k++)
+                    {          
+                        TriangleHitInfo hit = RayTriangle(localRay, triangles[k]); 
 
-                        if (currentHitInfo.didHit && returnHitInfo.dst > currentHitInfo.dst)
+                        if (hit.didHit && result.dst > hit.dst)
                         {
-                            returnHitInfo = currentHitInfo;
-                            material = mInfo.material;
+                            result.didHit = true;
+						    result.dst = hit.dst;
+						    result.normal = normalize(mul(model.LocalToWorldMatrix, float4(hit.normal, 0)));
+						    result.hitPoint = worldRay.ori + worldRay.dir * hit.dst;
+						    result.material = model.material;
                         }
                     }
                 }
 
-                return returnHitInfo;
+                return result;
+            }
+
+
+            ModelHitInfo CalculateRayCollision(Ray worldRay)
+            {
+                ModelHitInfo result;
+                result.didHit = false;
+                result.dst = 3.402823e+38; // Initialize to infinity
+
+                Ray localRay;
+
+                for (int i = 0; i < modelCount; i++)
+                {
+                    ModelInfo model = modelInfo[i];
+                    localRay.ori = mul(model.WorldToLocalMatrix, float4(worldRay.ori,1)).xyz;
+                    localRay.dir = mul(model.WorldToLocalMatrix, float4(worldRay.dir,0)).xyz;
+
+                    TriangleHitInfo hit = RayTriangleBVH(localRay, result.dst , model.nodeOffset, model.triangleOffSet);
+
+                    if (result.dst > hit.dst)
+                    {
+                        result.didHit = true;
+						result.dst = hit.dst;
+						result.normal = normalize(mul(model.LocalToWorldMatrix, float4(hit.normal, 0)));
+						result.hitPoint = worldRay.ori + worldRay.dir * hit.dst;
+						result.material = model.material;
+                    }
+
+                }
+
+                return result;
             }
 
             float3 TraceRay(Ray r, inout uint seed)
             {
+
+                bool useBvh = true;
+
                 float3 incomingLight = float3(0, 0, 0);
                 float3 rayColor = float3(1, 1, 1);
 
@@ -267,11 +355,21 @@ Shader "Unlit/NewUnlitShader"
 
                 for (int i = 0; i <= nbrOfRayBound; i++)
                 {
-                    RayTracingMaterial mat = (RayTracingMaterial)0;
-                    TriangleHitInfo hit = ComputeRayTriangle(r, mat);
+                    ModelHitInfo hit = (ModelHitInfo)0;
+
+                    if (useBvh)
+                    {
+                       hit = CalculateRayCollision(r);
+                    }
+                    else
+                    {
+                        hit = CalculateRayCollisionBruteForce(r);
+                    }
 
                     if (hit.didHit)
                     {
+                       RayTracingMaterial mat = hit.material;
+
                         r.ori = hit.hitPoint;
                         r.dir = RandomRayHemisphere(hit.normal, seed);
 
@@ -301,8 +399,8 @@ Shader "Unlit/NewUnlitShader"
             {
                 uint seed = GetPixelIndex(i.uv);
 
-                
-                
+              
+
                 const float3 viewPointLocal = float3(i.uv - 0.5, 1) * ViewParams;
                 const float3 viewPoint = mul(CamLocalToWorldMatrix, float4(viewPointLocal, 1));
 

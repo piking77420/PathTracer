@@ -33,6 +33,17 @@ public struct Bvh
         public Bounds bounds;
         public int triangleIndex;
         public int triangleCount;
+        public int depht;
+    }
+
+    public struct BvhNodeGpu 
+    {
+        public Vector3 boxMin;
+        public int child1Index;
+        public Vector3 boxMax;
+        public int child2Index;
+        public int triangleIndex;
+        public int triangleCount;
     }
 
     enum Axis
@@ -40,9 +51,27 @@ public struct Bvh
         X, Y, Z
     }
 
-    // one for mother Node
     public BvhNode[] BvhNodes;
-    public BVHTriangle[] triangles;
+    public BvhNodeGpu[] GetGpuNodes()
+    {
+        BvhNodeGpu[] returnArray = new BvhNodeGpu[BvhNodes.Length];
+
+        for (int i = 0; i < BvhNodes.Length; i++) 
+        {
+            returnArray[i].boxMin = BvhNodes[i].bounds.min;
+            returnArray[i].boxMax = BvhNodes[i].bounds.max;
+            returnArray[i].child1Index = BvhNodes[i].child1Index;
+            returnArray[i].child2Index = BvhNodes[i].child2Index;
+            returnArray[i].triangleIndex = BvhNodes[i].triangleIndex;
+            returnArray[i].triangleCount = BvhNodes[i].triangleCount;
+        }
+
+        return returnArray;
+    }
+
+    // one for mother Node
+    public BVHTriangle[] Bvhtriangles;
+    public Triangle[] triangles;
 
 
     void EncapsulateTriangle(ref Bounds bounds, Vector3 min, Vector3 max)
@@ -98,12 +127,13 @@ public struct Bvh
 
     void InitNode(ref BvhNode[] bvhNodes, int currentNodeIndex, int depth)
     {
+        ref BvhNode parent = ref bvhNodes[currentNodeIndex];
+        parent.depht = depth;
+
         if (depth == BvhMaxDepth)
         {
             return;
         }
-
-        ref BvhNode parent = ref bvhNodes[currentNodeIndex];
         // Set ChildIndex 
         parent.child1Index = currentNodeIndex * 2 + 1;
         parent.child2Index = currentNodeIndex * 2 + 2;
@@ -118,12 +148,13 @@ public struct Bvh
         child2.triangleIndex = parent.triangleIndex;
         child2.triangleCount = 0;
 
-        SplitNode(parent, ref child1, ref child2, Axis.Z);
+        SplitNode(parent, ref child1, ref child2, (Axis)(((int)Axis.Z + depth) % (int)Axis.Z) );
 
         // Sorting Triangle in order to get continius triagle for gpu
         for (int i = parent.triangleIndex; i < parent.triangleIndex + parent.triangleCount; i++)
         {
-            ref BVHTriangle currentTriangle = ref triangles[i];
+            ref BVHTriangle currentTriangle = ref Bvhtriangles[i];
+
             Vector3 center = currentTriangle.Centre;
             bool onSideA = child1.bounds.Contains(center);
             ref BvhNode node = ref child1;
@@ -137,13 +168,15 @@ public struct Bvh
                 node = ref child2;
             }
 
-            EncapsulateTriangle(ref node.bounds, currentTriangle.Min, currentTriangle.Max);
+            Bounds b = new Bounds();
+            b.SetMinMax(currentTriangle.Min, currentTriangle.Max);
+            node.bounds.Encapsulate(b);
             node.triangleCount++;
 
             if (onSideA)
             {
                 int swap = node.triangleIndex + node.triangleCount - 1;
-                (triangles[i], triangles[swap]) = ((triangles[swap], triangles[i]));
+                (Bvhtriangles[i], Bvhtriangles[swap]) = ((Bvhtriangles[swap], Bvhtriangles[i]));
                 child2.triangleIndex++;
             }
 
@@ -161,7 +194,8 @@ public struct Bvh
         int nodeSize = (1 << (BvhMaxDepth + 1)) - 1;
 
         BvhNodes = new BvhNode[nodeSize];
-        triangles = new BVHTriangle[indices.Length / 3];
+        Bvhtriangles = new BVHTriangle[indices.Length / 3];
+        triangles = new Triangle[indices.Length / 3];
 
         for (int i = 0; i < indices.Length; i += 3)
         {
@@ -171,14 +205,26 @@ public struct Bvh
             Vector3 centre = (a + b + c) / 3;
             Vector3 max = Vector3.Max(Vector3.Max(a, b), c);
             Vector3 min = Vector3.Min(Vector3.Min(a, b), c);
-            triangles[i / 3] = new BVHTriangle(centre, min, max, i);
+            Bvhtriangles[i / 3] = new BVHTriangle(centre, min, max, i);
         }
 
+
+        for (int i = 0; i < Bvhtriangles.Length; i++)
+        {
+            BVHTriangle buildTri = Bvhtriangles[i];
+            Vector3 a = verts[indices[buildTri.Index + 0]];
+            Vector3 b = verts[indices[buildTri.Index + 1]];
+            Vector3 c = verts[indices[buildTri.Index + 2]];
+            Vector3 norm_a = normals[indices[buildTri.Index + 0]];
+            Vector3 norm_b = normals[indices[buildTri.Index + 1]];
+            Vector3 norm_c = normals[indices[buildTri.Index + 2]];
+            triangles[i] = new Triangle(a, b, c, norm_a, norm_b, norm_c);
+        }
 
         ref BvhNode node = ref BvhNodes[0];
         node.bounds = baseBoundingBox;
         node.triangleIndex = 0;
-        node.triangleCount = triangles.Length;
+        node.triangleCount = Bvhtriangles.Length;
 
         InitNode(ref BvhNodes, 0, 0);
     }

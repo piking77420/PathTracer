@@ -29,12 +29,21 @@ public class RayTracingManager : MonoBehaviour
     [SerializeField]
     Material AccumulateMaterial;
 
-    [SerializeField]
-    RaytracingMeshManager RayTracingMeshManager;
-    
     RenderTexture resultTexture;
-   
 
+    RaytracingMeshManager raytracingMeshManager = new RaytracingMeshManager();
+
+    //https://discussions.unity.com/t/how-do-find-all-meshes-my-project/78300
+    [ContextMenu("UpdateModelData")]
+    void UpdateModelData() 
+    {
+        var models = FindObjectsOfType<RayTracingModel>();
+        raytracingMeshManager.UpateModelData(models, RayTracingMaterial);
+    }
+    private void Awake()
+    {
+        UpdateModelData();
+    }
 
     void ResizeRenderTarget(RenderTexture renderTexture)
     {
@@ -76,8 +85,7 @@ public class RayTracingManager : MonoBehaviour
             resultTexture.Create();
         }
 
-        var models = FindObjectsOfType<RayTracingModel>();
-        RayTracingMeshManager.UpateModelData(models, RayTracingMaterial);
+   
 
         ResizeRenderTarget(resultTexture);
         UpdateCameraInfo(Camera.current);
@@ -147,9 +155,14 @@ public class RayTracingManager : MonoBehaviour
         RayTracingMaterial.SetMatrix("CamLocalToWorldMatrix", cam.transform.localToWorldMatrix);
     }
 
+    private void OnEnable()
+    {
+        UpdateModelData();
+    }
+
     private void OnDisable()
     {
-        RayTracingMeshManager.DisableBuffer();
+        raytracingMeshManager.DisableBuffer();
 
         if (resultTexture != null)
         {

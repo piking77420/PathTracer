@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class RayTracingModel : MonoBehaviour
@@ -14,6 +15,7 @@ public class RayTracingModel : MonoBehaviour
     [SerializeField,Range(0, Bvh.BvhMaxDepth)]
     int CurrentDrawDepth;
 
+
     private void OnDrawGizmos()
     {
         if (!DrawBVH)
@@ -26,16 +28,19 @@ public class RayTracingModel : MonoBehaviour
 
         Bvh bvh = new Bvh(meshFilter.sharedMesh.vertices, meshFilter.sharedMesh.triangles, meshFilter.sharedMesh.normals, meshFilter.sharedMesh.bounds);
 
-        for (int i = 0; i < Bvh.BvhMaxDepth; i++)
+        var nodes = bvh.BvhNodes;
+
+        for (int i = 0; i < nodes.Length; i++)
         {
-            Bounds b = RaytracingMeshManager.GetMinMaxAbbWorld(bvh.BvhNodes[i].bounds, transform);
+            if (nodes[i].depht == CurrentDrawDepth)
+            {
 
-            Gizmos.DrawWireCube(b.center, b.size);
-            
+                Bounds b = RaytracingMeshManager.GetMinMaxAbbWorld(nodes[i].bounds, transform);
+                Gizmos.DrawWireCube(b.center, b.size);
+            }
 
+         
         }
-
-
     }
 
     private void OnValidate()

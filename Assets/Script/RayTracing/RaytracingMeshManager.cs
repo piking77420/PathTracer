@@ -7,30 +7,29 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEngine.XR;
 
-public class RaytracingMeshManager : MonoBehaviour
+public class RaytracingMeshManager 
 {
     class MeshDataLists
     {
         public List<Triangle> triangles = new();
         public List<MeshInfo> meshInfo = new();
-        public List<Bvh> bvhs = new();
+        public List<Bvh.BvhNodeGpu> nodes = new();
     }
 
     struct MeshInfo
     {
-        public int firstTriangleIndex;
-        public int numberOfTriangles;
+        public int nodeOffset;
+        public int triangleOffSet;
         public Matrix4x4 WorldToLocalMatrix;
         public Matrix4x4 LocalToWorldMatrix;
         public RayTracingMaterial Material;
-
-        public Vector3 boudMin;
-        public Vector3 boudMax;
     }
 
     public ComputeBuffer modelBuffer;
 
     public ComputeBuffer triangleBuffer;
+
+    public ComputeBuffer nodeBuffer;
 
     MeshInfo[] meshInfo;
 
@@ -103,25 +102,27 @@ public class RaytracingMeshManager : MonoBehaviour
     public void UpateModelData(RayTracingModel[] models, Material rayTracingMaterial)
     {
 
-
         var data = CreateAllMeshData(models);
         meshInfo = data.meshInfo.ToArray();
 
         ShaderHelper.CreateStructuredBuffer<Triangle>(ref triangleBuffer, data.triangles.ToArray());
         ShaderHelper.CreateStructuredBuffer<MeshInfo>(ref modelBuffer, meshInfo);
+        ShaderHelper.CreateStructuredBuffer<Bvh.BvhNodeGpu>(ref nodeBuffer, data.nodes.ToArray());
 
         rayTracingMaterial.SetBuffer("triangles", triangleBuffer);
         rayTracingMaterial.SetInt("triangleCount", triangleBuffer.count);
 
         rayTracingMaterial.SetBuffer("modelInfo", modelBuffer);
         rayTracingMaterial.SetInt("modelCount", models.Length);
+
+        rayTracingMaterial.SetBuffer("nodes", nodeBuffer);
     }
 
 
     MeshDataLists CreateAllMeshData(RayTracingModel[] models)
     {
         MeshDataLists allData = new();
-        Dictionary<Mesh, (int firstTriangleIndex, int triangleCount)> meshLookup = new();
+        Dictionary<Mesh, (int nodeOffset, int triOffset)> meshLookup = new();
 
         foreach (RayTracingModel model in models)
         {
@@ -129,27 +130,22 @@ public class RaytracingMeshManager : MonoBehaviour
 
             if (!meshLookup.ContainsKey(mesh))
             {
-                int triangleCount = mesh.triangles.Length / 3;
-                meshLookup.Add(mesh,(allData.triangles.Count, triangleCount));
+                meshLookup.Add(mesh, (allData.nodes.Count, allData.triangles.Count));
 
-                Triangle[] triangles = new Triangle[triangleCount];
+                Bvh bvh = new Bvh(mesh.vertices, mesh.triangles, mesh.normals, mesh.bounds);
 
-                GetTriangle(ref triangles, mesh.vertices, mesh.triangles, mesh.normals);
-
-                allData.bvhs.Add(new Bvh(mesh.vertices, mesh.triangles, mesh.normals, mesh.bounds));
-                allData.triangles.AddRange(triangles);
+                allData.triangles.AddRange(bvh.triangles);
+                allData.nodes.AddRange(bvh.GetGpuNodes());
             }
 
             // Create the mesh info
             allData.meshInfo.Add(new MeshInfo()
             {
-                firstTriangleIndex = meshLookup[mesh].firstTriangleIndex,
-                numberOfTriangles = meshLookup[mesh].triangleCount,
+                nodeOffset = meshLookup[mesh].nodeOffset,
+                triangleOffSet = meshLookup[mesh].triOffset,
                 WorldToLocalMatrix = model.transform.worldToLocalMatrix,
                 LocalToWorldMatrix = model.transform.localToWorldMatrix,
                 Material = model.material,
-                boudMin = mesh.bounds.min,
-                boudMax = mesh.bounds.max,
             });
         }
 
