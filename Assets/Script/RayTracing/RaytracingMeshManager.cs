@@ -103,13 +103,12 @@ public class RaytracingMeshManager
     {
 
         var data = CreateAllMeshData(models);
-        meshInfo = data.meshInfo.ToArray();
 
         ShaderHelper.CreateStructuredBuffer<Triangle>(ref triangleBuffer, data.triangles.ToArray());
-        ShaderHelper.CreateStructuredBuffer<MeshInfo>(ref modelBuffer, meshInfo);
+        ShaderHelper.CreateStructuredBuffer<MeshInfo>(ref modelBuffer, data.meshInfo.ToArray());
         ShaderHelper.CreateStructuredBuffer<Bvh.BvhNodeGpu>(ref nodeBuffer, data.nodes.ToArray());
 
-        rayTracingMaterial.SetBuffer("triangles", triangleBuffer);
+        rayTracingMaterial.SetBuffer("triangles", triangleBuffer);  
         rayTracingMaterial.SetInt("triangleCount", triangleBuffer.count);
 
         rayTracingMaterial.SetBuffer("modelInfo", modelBuffer);

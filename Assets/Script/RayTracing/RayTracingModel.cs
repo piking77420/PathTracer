@@ -34,8 +34,9 @@ public class RayTracingModel : MonoBehaviour
         {
             if (nodes[i].depht == CurrentDrawDepth)
             {
-
-                Bounds b = RaytracingMeshManager.GetMinMaxAbbWorld(nodes[i].bounds, transform);
+                Bounds b1 = new Bounds();
+                b1.SetMinMax(nodes[i].bounds.Min, nodes[i].bounds.Max);
+                Bounds b = RaytracingMeshManager.GetMinMaxAbbWorld(b1, transform);
                 Gizmos.DrawWireCube(b.center, b.size);
             }
 

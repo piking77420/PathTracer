@@ -157,19 +157,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4ba84f3ced00cd4479e4a067e10eed51, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.9995295
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4ba84f3ced00cd4479e4a067e10eed51, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4ba84f3ced00cd4479e4a067e10eed51, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.030673033
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4ba84f3ced00cd4479e4a067e10eed51, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4ba84f3ced00cd4479e4a067e10eed51, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -177,7 +177,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4ba84f3ced00cd4479e4a067e10eed51, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: 3.515
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4ba84f3ced00cd4479e4a067e10eed51, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
@@ -229,9 +229,9 @@ MonoBehaviour:
   material:
     color: {r: 0, g: 0, b: 0, a: 0}
     emissiveColor: {r: 1, g: 1, b: 1, a: 0}
-    emissiveStrength: 54.7
-  DrawBVH: 1
-  CurrentDrawDepth: 2
+    emissiveStrength: 59
+  DrawBVH: 0
+  CurrentDrawDepth: 18
 --- !u!1001 &1507280277
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -242,7 +242,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 6793266143181292745, guid: 1faed130a5ae45e48bc1306465ca3c87, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -2.164768
+      value: -0.688
       objectReference: {fileID: 0}
     - target: {fileID: 6793266143181292745, guid: 1faed130a5ae45e48bc1306465ca3c87, type: 3}
       propertyPath: m_LocalPosition.y
@@ -282,7 +282,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7134566675289166794, guid: 1faed130a5ae45e48bc1306465ca3c87, type: 3}
       propertyPath: UseShaderInEditor
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7295705165281824877, guid: 1faed130a5ae45e48bc1306465ca3c87, type: 3}
       propertyPath: m_Name

@@ -6,9 +6,9 @@ using Unity.VisualScripting;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 
-public struct Bvh
+public class Bvh
 {
-    public const int BvhMaxDepth = 10;
+    public const int BvhMaxDepth = 18;
 
     public readonly struct BVHTriangle
     {
@@ -30,13 +30,13 @@ public struct Bvh
     {
         public int child1Index;
         public int child2Index;
-        public Bounds bounds;
+        public BoundingBox bounds;
         public int triangleIndex;
         public int triangleCount;
         public int depht;
     }
 
-    public struct BvhNodeGpu 
+    public struct BvhNodeGpu
     {
         public Vector3 boxMin;
         public int child1Index;
@@ -52,14 +52,20 @@ public struct Bvh
     }
 
     public BvhNode[] BvhNodes;
+
+    // one for mother Node
+    private BVHTriangle[] Bvhtriangles;
+
+    public Triangle[] triangles;
+
     public BvhNodeGpu[] GetGpuNodes()
     {
         BvhNodeGpu[] returnArray = new BvhNodeGpu[BvhNodes.Length];
 
-        for (int i = 0; i < BvhNodes.Length; i++) 
+        for (int i = 0; i < BvhNodes.Length; i++)
         {
-            returnArray[i].boxMin = BvhNodes[i].bounds.min;
-            returnArray[i].boxMax = BvhNodes[i].bounds.max;
+            returnArray[i].boxMin = BvhNodes[i].bounds.Min;
+            returnArray[i].boxMax = BvhNodes[i].bounds.Max;
             returnArray[i].child1Index = BvhNodes[i].child1Index;
             returnArray[i].child2Index = BvhNodes[i].child2Index;
             returnArray[i].triangleIndex = BvhNodes[i].triangleIndex;
@@ -68,11 +74,6 @@ public struct Bvh
 
         return returnArray;
     }
-
-    // one for mother Node
-    public BVHTriangle[] Bvhtriangles;
-    public Triangle[] triangles;
-
 
     void EncapsulateTriangle(ref Bounds bounds, Vector3 min, Vector3 max)
     {
@@ -88,42 +89,52 @@ public struct Bvh
 
         bounds.SetMinMax(Min, Max);
     }
-    void SplitNode(BvhNode mother, ref BvhNode child1, ref BvhNode child2, Axis axis)
+    /*
+void SplitNode(BvhNode mother, ref BvhNode child1, ref BvhNode child2, Axis axis)
+{
+    Vector3 motherCenter = mother.bounds.Centre;
+    Vector3 motherSize = mother.bounds.Size;
+
+    Vector3 childSize = motherSize;
+    Vector3 child1Center, child2Center;
+
+    switch (axis)
     {
-        Vector3 motherCenter = mother.bounds.center;
-        Vector3 motherSize = mother.bounds.size;
+        case Axis.X:
+            childSize.x *= 0.5f;
+            child1Center = motherCenter - new Vector3(motherSize.x * 0.25f, 0, 0);
+            child2Center = motherCenter + new Vector3(motherSize.x * 0.25f, 0, 0);
+            break;
 
-        Vector3 childSize = motherSize;
-        Vector3 child1Center, child2Center;
+        case Axis.Y:
+            childSize.y *= 0.5f;
+            child1Center = motherCenter - new Vector3(0, motherSize.y * 0.25f, 0);
+            child2Center = motherCenter + new Vector3(0, motherSize.y * 0.25f, 0);
+            break;
 
-        switch (axis)
-        {
-            case Axis.X:
-                childSize.x *= 0.5f;
-                child1Center = motherCenter - new Vector3(motherSize.x * 0.25f, 0, 0);
-                child2Center = motherCenter + new Vector3(motherSize.x * 0.25f, 0, 0);
-                break;
+        case Axis.Z:
+            childSize.z *= 0.5f;
+            child1Center = motherCenter - new Vector3(0, 0, motherSize.z * 0.25f);
+            child2Center = motherCenter + new Vector3(0, 0, motherSize.z * 0.25f);
+            break;
 
-            case Axis.Y:
-                childSize.y *= 0.5f;
-                child1Center = motherCenter - new Vector3(0, motherSize.y * 0.25f, 0);
-                child2Center = motherCenter + new Vector3(0, motherSize.y * 0.25f, 0);
-                break;
+        default:
+            throw new ArgumentException("Invalid axis for splitting bounds.");
+    }
 
-            case Axis.Z:
-                childSize.z *= 0.5f;
-                child1Center = motherCenter - new Vector3(0, 0, motherSize.z * 0.25f);
-                child2Center = motherCenter + new Vector3(0, 0, motherSize.z * 0.25f);
-                break;
+    child1.bounds = new Bounds(child1Center, childSize);
+    child2.bounds = new Bounds(child2Center, childSize);
+} */
+    public static (int axis, float splitPos) GetSplitAxisAndPosition(BoundingBox bounds)
+    {
+        Vector3 size = bounds.Size;
+        int splitAxis = size.x > Mathf.Max(size.y, size.z) ? 0 : size.y > size.z ? 1 : 2;
 
-            default:
-                throw new ArgumentException("Invalid axis for splitting bounds.");
-        }
+        // Calculate the split position, which will be the center along the split axis
+        float splitPos = bounds.Centre[splitAxis];
 
-        child1.bounds = new Bounds(child1Center, childSize);
-        child2.bounds = new Bounds(child2Center, childSize);
-    } 
-
+        return (splitAxis, splitPos);
+    }
 
     void InitNode(ref BvhNode[] bvhNodes, int currentNodeIndex, int depth)
     {
@@ -148,30 +159,25 @@ public struct Bvh
         child2.triangleIndex = parent.triangleIndex;
         child2.triangleCount = 0;
 
-        SplitNode(parent, ref child1, ref child2, (Axis)(((int)Axis.Z + depth) % (int)Axis.Z) );
+        (int axis, float spliPos) = Bvh.GetSplitAxisAndPosition(parent.bounds); 
 
         // Sorting Triangle in order to get continius triagle for gpu
         for (int i = parent.triangleIndex; i < parent.triangleIndex + parent.triangleCount; i++)
         {
-            ref BVHTriangle currentTriangle = ref Bvhtriangles[i];
+            bool onSideA = Bvhtriangles[i].Centre[axis] < spliPos;
 
-            Vector3 center = currentTriangle.Centre;
-            bool onSideA = child1.bounds.Contains(center);
             ref BvhNode node = ref child1;
-
-            if (child1.bounds.Contains(center))
+            if (onSideA)
             {
                 node = ref child1;
             }
-            else
+            else 
             {
                 node = ref child2;
             }
-
-            Bounds b = new Bounds();
-            b.SetMinMax(currentTriangle.Min, currentTriangle.Max);
-            node.bounds.Encapsulate(b);
+            node.bounds.GrowToInclude(Bvhtriangles[i].Min, Bvhtriangles[i].Max);
             node.triangleCount++;
+
 
             if (onSideA)
             {
@@ -196,6 +202,7 @@ public struct Bvh
         BvhNodes = new BvhNode[nodeSize];
         Bvhtriangles = new BVHTriangle[indices.Length / 3];
         triangles = new Triangle[indices.Length / 3];
+  
 
         for (int i = 0; i < indices.Length; i += 3)
         {
@@ -208,6 +215,14 @@ public struct Bvh
             Bvhtriangles[i / 3] = new BVHTriangle(centre, min, max, i);
         }
 
+        ref BvhNode node = ref BvhNodes[0];
+        node.bounds.Min = baseBoundingBox.min;
+        node.bounds.Max = baseBoundingBox.max;
+
+        node.triangleIndex = 0;
+        node.triangleCount = Bvhtriangles.Length;
+
+        InitNode(ref BvhNodes, 0, 0);
 
         for (int i = 0; i < Bvhtriangles.Length; i++)
         {
@@ -221,12 +236,36 @@ public struct Bvh
             triangles[i] = new Triangle(a, b, c, norm_a, norm_b, norm_c);
         }
 
-        ref BvhNode node = ref BvhNodes[0];
-        node.bounds = baseBoundingBox;
-        node.triangleIndex = 0;
-        node.triangleCount = Bvhtriangles.Length;
+      
 
-        InitNode(ref BvhNodes, 0, 0);
     }
 
+
+    public struct BoundingBox
+    {
+        public Vector3 Min;
+        public Vector3 Max;
+        public Vector3 Centre => (Min + Max) / 2;
+        public Vector3 Size => Max - Min;
+        bool hasPoint;
+
+        public void GrowToInclude(Vector3 min, Vector3 max)
+        {
+            if (hasPoint)
+            {
+                Min.x = min.x < Min.x ? min.x : Min.x;
+                Min.y = min.y < Min.y ? min.y : Min.y;
+                Min.z = min.z < Min.z ? min.z : Min.z;
+                Max.x = max.x > Max.x ? max.x : Max.x;
+                Max.y = max.y > Max.y ? max.y : Max.y;
+                Max.z = max.z > Max.z ? max.z : Max.z;
+            }
+            else
+            {
+                hasPoint = true;
+                Min = min;
+                Max = max;
+            }
+        }
+    }
 }

@@ -37,6 +37,7 @@ public class RayTracingManager : MonoBehaviour
     [ContextMenu("UpdateModelData")]
     void UpdateModelData() 
     {
+        // TO DO SEPARE MODEL INFO MATRIX ETC AND BVH BUILD
         var models = FindObjectsOfType<RayTracingModel>();
         raytracingMeshManager.UpateModelData(models, RayTracingMaterial);
     }
@@ -85,8 +86,8 @@ public class RayTracingManager : MonoBehaviour
             resultTexture.Create();
         }
 
-   
-
+    
+        //UpdateModelData();
         ResizeRenderTarget(resultTexture);
         UpdateCameraInfo(Camera.current);
         SetSettings();

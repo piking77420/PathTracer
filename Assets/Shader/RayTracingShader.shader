@@ -125,8 +125,6 @@ Shader "Unlit/NewUnlitShader"
             StructuredBuffer<Triangle> triangles;
             int triangleCount;
 
-            const int BvhMaxDepth = 10;
-            const int MaxNodePerBVH = 1023;
 
             StructuredBuffer<BvhNode> nodes;
 
@@ -233,7 +231,7 @@ Shader "Unlit/NewUnlitShader"
                 TriangleHitInfo result = (TriangleHitInfo)0;
                 result.dst = rayLength;
     
-                int stackIndex[10];
+                int stackIndex[32];
                 int stackIterator = 0;
                 stackIndex[stackIterator++] = nodeOffset;
 
@@ -241,16 +239,18 @@ Shader "Unlit/NewUnlitShader"
 
                 while(stackIterator > 0)
                 {
-                    BvhNode node = nodes[nodeOffset + stackIndex[--stackIterator]];
+                    BvhNode node = nodes[stackIndex[--stackIterator]];
                     bool intersect = RayBoundingBox(ray, node.boxMin, node.boxMax);
 
                     if (intersect)
                     {
                         if (isLeafNode(node))
                         {
-                            for (int i = node.triangleIndex; i < node.triangleIndex + node.triangleCount; i++)
+                            for (int i = triOffset + node.triangleIndex; i <  triOffset + node.triangleIndex + node.triangleCount; i++)
                             {
-                                TriangleHitInfo hit = RayTriangle(ray, triangles[i]); 
+                                Triangle tri = triangles[i];
+
+                                TriangleHitInfo hit = RayTriangle(ray, tri); 
 
                                 if (hit.didHit && result.dst > hit.dst)
                                 {
@@ -261,8 +261,8 @@ Shader "Unlit/NewUnlitShader"
                         else
                         {
                             
-                            stackIndex[stackIterator++] = node.child1Index;
-                            stackIndex[stackIterator++] = node.child2Index;
+                            stackIndex[stackIterator++] = nodeOffset + node.child1Index;
+                            stackIndex[stackIterator++] = nodeOffset + node.child2Index;
                         }
                     }
                  
