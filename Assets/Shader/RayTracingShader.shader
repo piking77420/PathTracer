@@ -231,7 +231,7 @@ Shader "Unlit/NewUnlitShader"
                 TriangleHitInfo result = (TriangleHitInfo)0;
                 result.dst = rayLength;
     
-                int stackIndex[32];
+                int stackIndex[16];
                 int stackIterator = 0;
                 stackIndex[stackIterator++] = nodeOffset;
 
@@ -370,17 +370,18 @@ Shader "Unlit/NewUnlitShader"
                     {
                        RayTracingMaterial mat = hit.material;
 
-                        r.ori = hit.hitPoint;
-                        r.dir = RandomRayHemisphere(hit.normal, seed);
+                       r.ori = hit.hitPoint;
+                       //r.dir = reflect(r.dir,hit.normal);
+                       r.dir = RandomRayHemisphere(hit.normal, seed);
 
-                        float3 emmitedLight = mat.emmisiveColor * mat.emmisiveStrenght;
+                       float3 emmitedLight = mat.emmisiveColor * mat.emmisiveStrenght;
 
-                        float lightStreng = dot(hit.normal, r.dir);
+                       float lightStreng = dot(hit.normal, r.dir);
 
-                        incomingLight += emmitedLight * rayColor;
-                        rayColor *= mat.color * lightStreng;
+                       incomingLight += emmitedLight * rayColor;
+                       rayColor *= mat.color * lightStreng;
 
-                        hasHitSomething = true;
+                       hasHitSomething = true;
                       
                     }
                     else
@@ -399,8 +400,6 @@ Shader "Unlit/NewUnlitShader"
             {
                 uint seed = GetPixelIndex(i.uv);
 
-              
-
                 const float3 viewPointLocal = float3(i.uv - 0.5, 1) * ViewParams;
                 const float3 viewPoint = mul(CamLocalToWorldMatrix, float4(viewPointLocal, 1));
 
@@ -410,7 +409,7 @@ Shader "Unlit/NewUnlitShader"
 
                 float3 luminance = 0;
 
-                for (int rayIndex = 0; rayIndex <= nbrOfRayPerPixel; rayIndex++)
+                for (int rayIndex = 0; rayIndex < nbrOfRayPerPixel; rayIndex++)
                 {
                     luminance += TraceRay(ray, seed);
                 }

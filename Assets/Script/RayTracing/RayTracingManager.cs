@@ -10,10 +10,10 @@ public class RayTracingManager : MonoBehaviour
     static public RayTracingManager Instance;
 
     // Setting
-    [SerializeField, Range(1, 1000)]
+    [SerializeField, Range(1, 20)]
     int nbrOfRayBound = 10;
 
-    [SerializeField, Range(1, 1000)]
+    [SerializeField, Range(1, 20)]
     int nbrOfRayPerPixel = 1;
 
     [SerializeField]
@@ -32,6 +32,14 @@ public class RayTracingManager : MonoBehaviour
     RenderTexture resultTexture;
 
     RaytracingMeshManager raytracingMeshManager = new RaytracingMeshManager();
+
+
+    [ContextMenu("UpdateModelData")]
+    void GetAllModel() 
+    {
+        var models = FindObjectsOfType<RayTracingModel>();
+        
+    }
 
     //https://discussions.unity.com/t/how-do-find-all-meshes-my-project/78300
     [ContextMenu("UpdateModelData")]

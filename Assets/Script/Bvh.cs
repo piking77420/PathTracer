@@ -8,7 +8,7 @@ using UnityEngine;
 
 public class Bvh
 {
-    public const int BvhMaxDepth = 18;
+    public const int BvhMaxDepth = 12;
 
     public readonly struct BVHTriangle
     {
